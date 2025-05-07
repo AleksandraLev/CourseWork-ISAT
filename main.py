@@ -11,9 +11,9 @@ with open("intents.json", "r", encoding="utf-8") as f:
     data = json.load(f)
     intents = data['intents']
 # Загрузка модели и векторизатора
-with open("chatbot_model.pkl", "rb") as f:
+with open("chatbot_model_main.pkl", "rb") as f:
     model = pickle.load(f)
-with open("vectorizer.pkl", "rb") as f:
+with open("vectorizer_main.pkl", "rb") as f:
     vectorizer = pickle.load(f)
 
 
@@ -51,6 +51,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Очищаем текст от лишних символов
     cleaned = clean_text(text)
+
+    if cleaned in ["да", "ага", "хочу", "конечно"]:
+        last = context.user_data.get("last_intent")
+        print(last)
+        if last == "питание_royal":
+            print('Продолжение питание_royal')
+            await update.message.reply_text("Вот ссылка на Royal Canin: https://example.com/royal-canin")
+            context.user_data["last_intent"] = None
+            return
+        elif last == "питание_purina":
+            print('Продолжение питание_purina')
+            await update.message.reply_text("Вот ссылка на Purina One: https://example.com/purina")
+            context.user_data["last_intent"] = None
+            return
+        elif last == "скидки":
+            print('Продолжение скидки')
+            await update.message.reply_text("Подробности о скидках: https://example.com/sales")
+            context.user_data["last_intent"] = None
+            return
 
     # Создание списка допустимых вариантов из тегов в intents.json
     #valid_options = [intent["tag"] for intent in intents]
@@ -95,6 +114,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         intent = tag_to_intent[predicted_tag]
         response = random.choice(intent["responses"])
         await update.message.reply_text(response)
+
+        # Если этот ответ бота требует подтверждения — сохранить last_intent
+        if predicted_tag in ["питание_royal", "питание_purina", "скидки"]:
+            context.user_data["last_intent"] = predicted_tag
+            print(f"Сохраняем last_intent: {predicted_tag}")
+
         return
         
     # Если ничего не подошло
