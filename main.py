@@ -1,10 +1,12 @@
 import json
 import random
-from telegram import Update
+from telegram import Update, Message
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from breed_selector import handle_breed_dialog, start_breed_dialog
 from text_utils import clean_text, correct_spelling_tag, lemmatize, correct_spelling_words
 import pickle
+import subprocess
+from voice_utils import recognize_voice_from_file
 
 
 with open("intents.json", "r", encoding="utf-8") as f:
@@ -42,7 +44,32 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
+    if update.message.voice:
+        file = await update.message.voice.get_file()
+        file_path = "voice.ogg"
+        wav_path = "voice.wav"
+
+        await file.download_to_drive(file_path)
+
+        ffmpeg_path = r"C:\\Users\Aleksandra\\Study\\Intelligent Systems and Technologies 2\\Coursework\\CourseWork-ISAT\\ffmpeg-7.1.1-essentials_build\bin\\ffmpeg.exe"
+        try:
+            subprocess.run([ffmpeg_path, "-i", file_path, wav_path, "-y"], check=True)
+        except Exception as e:
+            await update.message.reply_text("Ошибка! Попробуйте позже.")
+            print("Ошибка при конвертации аудио")
+            return
+
+        text = recognize_voice_from_file(wav_path)
+
+        if text:
+            # Отправляем распознанный текст пользователю
+            await update.message.reply_text("Вы сказали: " + text)
+        else:
+            await update.message.reply_text("Не удалось распознать голосовое сообщение.")
+            return
+    
+    elif update.message.text:
+        text = update.message.text.lower()
 
     # Если пользователь находится в диалоге подбора породы
     if "breed_dialog" in context.user_data:
@@ -110,6 +137,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if predicted_tag == "подбор_породы":
         await start_breed_dialog(update, context)
         return
+    elif predicted_tag == "прощание":
+        response = random.choice(intent["responses"])
+        await update.message.reply_text(response)
+        await start_over(update, context)
+        return
     elif predicted_tag in tag_to_intent:
         intent = tag_to_intent[predicted_tag]
         response = random.choice(intent["responses"])
@@ -134,6 +166,8 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(MessageHandler(filters.VOICE, handle_message))
+    #app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     print("Бот запущен...")
     app.run_polling()

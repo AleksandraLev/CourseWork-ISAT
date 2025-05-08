@@ -2,7 +2,9 @@ import json
 from telegram import Update
 from telegram.ext import ContextTypes
 from text_utils import clean_text, correct_spelling_words, lemmatize
+from voice_utils import recognize_voice_from_file
 import pickle
+import subprocess
 
 # Загружаем вопросы из JSON
 with open("questions_about_breed.json", "r", encoding="utf-8") as f:
@@ -44,8 +46,32 @@ async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Что-то пошло не так. Попробуйте сначала.")
         context.user_data.pop("breed_dialog", None)
         return
+    if update.message.voice:
+        file = await update.message.voice.get_file()
+        file_path = "voice.ogg"
+        wav_path = "voice.wav"
 
-    user_input = update.message.text.strip().lower()
+        await file.download_to_drive(file_path)
+
+        ffmpeg_path = r"C:\\Users\Aleksandra\\Study\\Intelligent Systems and Technologies 2\\Coursework\\CourseWork-ISAT\\ffmpeg-7.1.1-essentials_build\bin\\ffmpeg.exe"
+        try:
+            subprocess.run([ffmpeg_path, "-i", file_path, wav_path, "-y"], check=True)
+        except Exception as e:
+            await update.message.reply_text("Ошибка! Попробуйте позже.")
+            print("Ошибка при конвертации аудио")
+            return
+
+        user_input = recognize_voice_from_file(wav_path)
+
+        if user_input:
+            # Отправляем распознанный текст пользователю
+            await update.message.reply_text("Вы сказали: " + user_input)
+        else:
+            await update.message.reply_text("Не удалось распознать голосовое сообщение.")
+            return
+    
+    elif update.message.text:
+        user_input = update.message.text.strip().lower()
     question = questions[step]
     key = question["key"]
     valid_options = question["options"]
