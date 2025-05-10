@@ -34,7 +34,7 @@ def select_cat_breed(answers):
 async def start_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["breed_dialog"] = {"step": 0, "answers": {}}
     first_question = questions[0]["question"] + "\n(" + " / ".join(questions[0]["options"]) + ")"
-    await update.message.reply_text(f"Отлично! Начнем.\n{first_question}")
+    await update.message.reply_text(f"{first_question}")
 
 # Обработка овпросов
 async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):

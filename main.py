@@ -1,6 +1,7 @@
 import json
 import random
-from telegram import Update, Message
+from pathlib import Path
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from breed_selector import handle_breed_dialog, start_breed_dialog
 from text_utils import clean_text, correct_spelling_tag, lemmatize, correct_spelling_words
@@ -22,10 +23,11 @@ with open("vectorizer_main.pkl", "rb") as f:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Я твой усатый бот зоомагазина. Спросите что-нибудь!")
 
-async def start_over(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_over(update: Update, context: ContextTypes.DEFAULT_TYPE, is_not_goodbye = True):
     # Сброс данных опроса
     context.user_data.pop("breed_dialog", None)
-    await start(update, context)
+    if is_not_goodbye:
+        await start(update, context)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
@@ -51,7 +53,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await file.download_to_drive(file_path)
 
-        ffmpeg_path = r"C:\\Users\Aleksandra\\Study\\Intelligent Systems and Technologies 2\\Coursework\\CourseWork-ISAT\\ffmpeg-7.1.1-essentials_build\bin\\ffmpeg.exe"
+        # Корень проекта (файл main.py или аналог — от него и считается)
+        BASE_DIR = Path(__file__).resolve().parent
+        # Относительный путь к ffmpeg
+        ffmpeg_path = str(BASE_DIR / "ffmpeg-7.1.1-essentials_build" / "bin" / "ffmpeg.exe")
+        
         try:
             subprocess.run([ffmpeg_path, "-i", file_path, wav_path, "-y"], check=True)
         except Exception as e:
@@ -132,12 +138,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tag_to_intent = {intent["tag"]: intent for intent in intents}
     # Если тег — это запуск подбора породы
     if predicted_tag == "подбор_породы":
+        intent = tag_to_intent[predicted_tag]
+        response = random.choice(intent["responses"])
+        await update.message.reply_text(response)
         await start_breed_dialog(update, context)
         return
     elif predicted_tag == "прощание":
+        intent = tag_to_intent[predicted_tag]
         response = random.choice(intent["responses"])
         await update.message.reply_text(response)
-        await start_over(update, context)
+        await start_over(update, context, False)
         return
     elif predicted_tag in tag_to_intent:
         intent = tag_to_intent[predicted_tag]
