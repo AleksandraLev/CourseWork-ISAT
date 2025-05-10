@@ -98,9 +98,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["last_intent"] = None
             return
 
-    # Создание списка допустимых вариантов из тегов в intents.json
-    #valid_options = [intent["tag"] for intent in intents]
-
+    # Создание списка допустимых вариантов из паттернов в intents.json
     pattern_to_tag = {}
     for intent in intents:
         for pattern in intent["patterns"]:
@@ -114,7 +112,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Обработка интентов
     # Используем ML-модель для анализа намерения
-    
     if is_corrected:
         predicted_tag = corrected_tag
     else:
@@ -165,9 +162,7 @@ def main():
     app.add_handler(CommandHandler("start_over", start_over))
     app.add_handler(CommandHandler("help", help_command))
 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_handler(MessageHandler(filters.VOICE, handle_message))
-    #app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    app.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.VOICE, handle_message))
 
     print("Бот запущен...")
     app.run_polling()
