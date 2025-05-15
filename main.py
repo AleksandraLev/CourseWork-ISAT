@@ -1,3 +1,4 @@
+import os
 import json
 import random
 from pathlib import Path
@@ -8,7 +9,9 @@ from text_utils import clean_text, correct_spelling_tag, lemmatize, correct_spel
 import pickle
 import subprocess
 from voice_utils import recognize_voice_from_file
+from dotenv import load_dotenv
 
+load_dotenv(dotenv_path="token.env")
 
 with open("intents.json", "r", encoding="utf-8") as f:
     data = json.load(f)
@@ -85,7 +88,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Очищаем текст от лишних символов
     cleaned = clean_text(text)
 
-    if cleaned in ["да", "ага", "хочу", "конечно"]:
+    if cleaned in ["да", "ага", "хочу", "конечно", "угу"]:
         last = context.user_data.get("last_intent")
         print(last)
         if last == "питание_royal":
@@ -98,9 +101,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Вот ссылка на Purina One: https://example.com/purina")
             context.user_data["last_intent"] = None
             return
-        elif last == "скидки":
-            print('Продолжение скидки')
+        elif last == "реклама":
+            print('Продолжение рекламы')
             await update.message.reply_text("Подробности о скидках: https://example.com/sales")
+            context.user_data["last_intent"] = None
+            return
+        elif last == "товары":
+            print('Продолжение информации о товарах')
+            await update.message.reply_text("Посмотрите предствленные в наличие товары: https://example.com/catalog")
             context.user_data["last_intent"] = None
             return
 
@@ -155,7 +163,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response)
 
         # Если этот ответ бота требует подтверждения — сохранить last_intent
-        if predicted_tag in ["питание_royal", "питание_purina", "скидки"]:
+        if predicted_tag in ["питание_royal", "питание_purina", "скидки", "товары", "реклама"]:
             context.user_data["last_intent"] = predicted_tag
             print(f"Сохраняем last_intent: {predicted_tag}")
 
@@ -165,7 +173,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Не понял вопрос. Попробуйте иначе.")
 
 def main():
-    TOKEN = "8000634178:AAHEWtG8rw_V0wf5kc6nELl-1M-VGpYTp28"
+    TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
