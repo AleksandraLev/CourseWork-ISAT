@@ -1,5 +1,5 @@
 import json
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ContextTypes
 from text_utils import clean_text, correct_spelling_words, lemmatize
 from voice_utils import recognize_voice_from_file
@@ -33,8 +33,16 @@ def select_cat_breed(answers):
 # Старт диалога
 async def start_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["breed_dialog"] = {"step": 0, "answers": {}}
-    first_question = questions[0]["question"] + "\n(" + " / ".join(questions[0]["options"]) + ")"
-    await update.message.reply_text(f"{first_question}")
+    first_question = questions[0]
+    reply_markup = ReplyKeyboardMarkup(
+        [[option] for option in first_question["options"]],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+    await update.message.reply_text(
+        text=first_question["question"],
+        reply_markup=reply_markup
+)
 
 # Обработка овпросов
 async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -105,15 +113,28 @@ async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Обновление состояния
     step += 1
-    #for option in valid_options:
     if step < len(questions):
         next_q = questions[step]
-        q_text = next_q["question"] + "\n(" + " / ".join(next_q["options"]) + ")"
+        reply_markup = ReplyKeyboardMarkup(
+            [[option] for option in next_q["options"]],
+            resize_keyboard=True,
+            one_time_keyboard=True
+        )
         context.user_data["breed_dialog"] = {"step": step, "answers": answers}
-        await update.message.reply_text(q_text)
+        await update.message.reply_text(
+            text=next_q["question"],
+            reply_markup=reply_markup
+        )
     else:
         # Завершение диалога
         result = select_cat_breed(answers)
+        # Удаляем клавиатуру (отдельным сообщением)
+        await update.message.reply_text(
+            "Спасибо за ответы!",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        # Теперь выводм сообщение с результатом
         await update.message.reply_text(f"Рекомендуемая порода: {result}")
+        # Очищаем данные пользователя
         context.user_data.pop("breed_dialog", None)
 

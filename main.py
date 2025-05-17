@@ -22,6 +22,15 @@ with open("chatbot_model_main.pkl", "rb") as f:
 with open("vectorizer_main.pkl", "rb") as f:
     vectorizer = pickle.load(f)
 
+# Загружаем вопросы из JSON
+with open("answers_for_advertisement.json", "r", encoding="utf-8") as f:
+    answers = json.load(f)["answers_for_advertisement"]
+    # Загрузка модели и векторизатора
+with open("chatbot_model_for_advertisement.pkl", "rb") as f:
+    model_advertisement = pickle.load(f)
+with open("vectorizer_for_advertisement.pkl", "rb") as f:
+    vectorizer_advertisement = pickle.load(f)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Я твой усатый бот зоомагазина. Спросите что-нибудь!")
@@ -87,31 +96,64 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Очищаем текст от лишних символов
     cleaned = clean_text(text)
+    last = context.user_data.get("last_intent")
+    if last == "питание_royal" or last == "питание_purina" or last == "реклама" or last == "товары":
+        # Создание списка допустимых вариантов из паттернов в intents.json
+        pattern_to_tag_advertisement = {}
+        for answer in answers:
+            for pattern in answer["patterns"]:
+                pattern_to_tag_advertisement[pattern] = answer["tag"]
 
-    if cleaned in ["да", "ага", "хочу", "конечно", "угу"]:
-        last = context.user_data.get("last_intent")
-        print(last)
-        if last == "питание_royal":
-            print('Продолжение питание_royal')
-            await update.message.reply_text("Вот ссылка на Royal Canin: https://example.com/royal-canin")
-            context.user_data["last_intent"] = None
-            return
-        elif last == "питание_purina":
-            print('Продолжение питание_purina')
-            await update.message.reply_text("Вот ссылка на Purina One: https://example.com/purina")
-            context.user_data["last_intent"] = None
-            return
-        elif last == "реклама":
-            print('Продолжение рекламы')
-            await update.message.reply_text("Подробности о скидках: https://example.com/sales")
-            context.user_data["last_intent"] = None
-            return
-        elif last == "товары":
-            print('Продолжение информации о товарах')
-            await update.message.reply_text("Посмотрите предствленные в наличие товары: https://example.com/catalog")
-            context.user_data["last_intent"] = None
-            return
+        # Исправление опечаток, используя теги из answers_for_advertisement.json
+        corrected_tag, is_corrected = correct_spelling_tag(cleaned, pattern_to_tag_advertisement)
 
+        # Обработка интентов
+        # Используем ML-модель для анализа намерения
+        if is_corrected:
+            predicted_tag = corrected_tag
+        else:
+            predicted_words = correct_spelling_words(cleaned, pattern_to_tag_advertisement)
+            # Получаем вероятности предсказания по всем тегам
+            X = vectorizer_advertisement.transform([predicted_words])  # Преобразуем текст в формат, который понимает модель
+            probs = model_advertisement.predict_proba(X)[0]  # Получаем вероятности для всех тегов
+            max_prob_index = probs.argmax()  # Находим тег с максимальной вероятностью
+            max_prob = probs[max_prob_index] # Получаем эту максимальную вероятность наиболее вероятного тэга
+            predicted_tag = model_advertisement.classes_[max_prob_index] # Извлекаем тег
+
+            print(f"Predicted tag: {predicted_tag}, Probability: {max_prob}")
+            # Уверенность предсказания должна быть хотя бы 0.6 (можно подстроить)
+            if max_prob < 0.23:
+                context.user_data["last_intent"] = None
+                return
+
+        tag_to_intent = {answer["tag"]: answer for answer in answers}
+        # Если тег — это запуск подбора породы
+        if predicted_tag == "согласие":
+            last = context.user_data.get("last_intent")
+            intent = tag_to_intent[predicted_tag]
+            if last == "питание_royal":
+                await update.message.reply_text(intent["responses"][0])
+                context.user_data["last_intent"] = None
+                return
+            elif last == "питание_purina":
+                await update.message.reply_text(intent["responses"][1])
+                context.user_data["last_intent"] = None
+                return
+            elif last == "реклама":
+                await update.message.reply_text(intent["responses"][2])
+                context.user_data["last_intent"] = None
+                return
+            elif last == "товары":
+                await update.message.reply_text(intent["responses"][3])
+                context.user_data["last_intent"] = None
+                return
+        elif predicted_tag == "отрицание":
+            intent = tag_to_intent[predicted_tag]
+            response = random.choice(intent["responses"])
+            await update.message.reply_text(response)
+            context.user_data["last_intent"] = None
+            return
+    
     # Создание списка допустимых вариантов из паттернов в intents.json
     pattern_to_tag = {}
     for intent in intents:
@@ -120,9 +162,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Исправление опечаток, используя теги из intents.json
     corrected_tag, is_corrected = correct_spelling_tag(cleaned, pattern_to_tag)
-    
-    # Лемматизация текста
-    #lemmatized_text = lemmatize(corrected)
 
     # Обработка интентов
     # Используем ML-модель для анализа намерения
@@ -134,7 +173,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         X = vectorizer.transform([predicted_words])  # Преобразуем текст в формат, который понимает модель
         probs = model.predict_proba(X)[0]  # Получаем вероятности для всех тегов
         max_prob_index = probs.argmax()  # Находим тег с максимальной вероятностью
-        max_prob = probs[max_prob_index]
+        max_prob = probs[max_prob_index] # Получаем эту максимальную вероятность наиболее вероятного тэга
         predicted_tag = model.classes_[max_prob_index] # Извлекаем тег
 
         print(f"Predicted tag: {predicted_tag}, Probability: {max_prob}")
