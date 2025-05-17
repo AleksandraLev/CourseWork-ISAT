@@ -1,14 +1,15 @@
 import os
+import io
 import json
 import random
 from pathlib import Path
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from breed_selector import handle_breed_dialog, start_breed_dialog
 from text_utils import clean_text, correct_spelling_tag, lemmatize, correct_spelling_words
 import pickle
 import subprocess
-from voice_utils import recognize_voice_from_file
+from voice_utils import recognize_voice_from_file, send_text_with_voice_button, callback_tts_handler
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="token.env")
@@ -25,11 +26,6 @@ with open("vectorizer_main.pkl", "rb") as f:
 # Загружаем вопросы из JSON
 with open("answers_for_advertisement.json", "r", encoding="utf-8") as f:
     answers = json.load(f)["answers_for_advertisement"]
-    # Загрузка модели и векторизатора
-with open("chatbot_model_for_advertisement.pkl", "rb") as f:
-    model_advertisement = pickle.load(f)
-with open("vectorizer_for_advertisement.pkl", "rb") as f:
-    vectorizer_advertisement = pickle.load(f)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -96,63 +92,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Очищаем текст от лишних символов
     cleaned = clean_text(text)
-    last = context.user_data.get("last_intent")
-    if last == "питание_royal" or last == "питание_purina" or last == "реклама" or last == "товары":
-        # Создание списка допустимых вариантов из паттернов в intents.json
-        pattern_to_tag_advertisement = {}
-        for answer in answers:
-            for pattern in answer["patterns"]:
-                pattern_to_tag_advertisement[pattern] = answer["tag"]
-
-        # Исправление опечаток, используя теги из answers_for_advertisement.json
-        corrected_tag, is_corrected = correct_spelling_tag(cleaned, pattern_to_tag_advertisement)
-
-        # Обработка интентов
-        # Используем ML-модель для анализа намерения
-        if is_corrected:
-            predicted_tag = corrected_tag
-        else:
-            predicted_words = correct_spelling_words(cleaned, pattern_to_tag_advertisement)
-            # Получаем вероятности предсказания по всем тегам
-            X = vectorizer_advertisement.transform([predicted_words])  # Преобразуем текст в формат, который понимает модель
-            probs = model_advertisement.predict_proba(X)[0]  # Получаем вероятности для всех тегов
-            max_prob_index = probs.argmax()  # Находим тег с максимальной вероятностью
-            max_prob = probs[max_prob_index] # Получаем эту максимальную вероятность наиболее вероятного тэга
-            predicted_tag = model_advertisement.classes_[max_prob_index] # Извлекаем тег
-
-            print(f"Predicted tag: {predicted_tag}, Probability: {max_prob}")
-            # Уверенность предсказания должна быть хотя бы 0.6 (можно подстроить)
-            if max_prob < 0.23:
-                context.user_data["last_intent"] = None
-                return
-
-        tag_to_intent = {answer["tag"]: answer for answer in answers}
-        # Если тег — это запуск подбора породы
-        if predicted_tag == "согласие":
-            last = context.user_data.get("last_intent")
-            intent = tag_to_intent[predicted_tag]
-            if last == "питание_royal":
-                await update.message.reply_text(intent["responses"][0])
-                context.user_data["last_intent"] = None
-                return
-            elif last == "питание_purina":
-                await update.message.reply_text(intent["responses"][1])
-                context.user_data["last_intent"] = None
-                return
-            elif last == "реклама":
-                await update.message.reply_text(intent["responses"][2])
-                context.user_data["last_intent"] = None
-                return
-            elif last == "товары":
-                await update.message.reply_text(intent["responses"][3])
-                context.user_data["last_intent"] = None
-                return
-        elif predicted_tag == "отрицание":
-            intent = tag_to_intent[predicted_tag]
-            response = random.choice(intent["responses"])
-            await update.message.reply_text(response)
-            context.user_data["last_intent"] = None
-            return
     
     # Создание списка допустимых вариантов из паттернов в intents.json
     pattern_to_tag = {}
@@ -179,27 +118,58 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"Predicted tag: {predicted_tag}, Probability: {max_prob}")
         # Уверенность предсказания должна быть хотя бы 0.6 (можно подстроить)
         if max_prob < 0.23:
-            await update.message.reply_text("Я не совсем понял вас. Попробуйте переформулировать.")
+            await send_text_with_voice_button(update, context, "Я не совсем понял вас. Попробуйте переформулировать.")
             return
         
     tag_to_intent = {intent["tag"]: intent for intent in intents}
     # Если тег — это запуск подбора породы
-    if predicted_tag == "подбор_породы":
+    
+    last = context.user_data.get("last_intent")
+    if last == "питание_royal" or last == "питание_purina" or last == "реклама" or last == "товары":
+        tag_to_intent_advertisement = {answer["tag"]: answer for answer in answers}
+        if predicted_tag == "согласие":
+            last = context.user_data.get("last_intent")
+            intent = tag_to_intent_advertisement[predicted_tag]
+            if last == "питание_royal":
+                await update.message.reply_text(intent["responses"][0])
+                context.user_data["last_intent"] = None
+                return
+            elif last == "питание_purina":
+                await update.message.reply_text(intent["responses"][1])
+                context.user_data["last_intent"] = None
+                return
+            elif last == "реклама":
+                await update.message.reply_text(intent["responses"][2])
+                context.user_data["last_intent"] = None
+                return
+            elif last == "товары":
+                await update.message.reply_text(intent["responses"][3])
+                context.user_data["last_intent"] = None
+                return
+        elif predicted_tag == "отрицание":
+            intent = tag_to_intent_advertisement[predicted_tag]
+            response = random.choice(intent["responses"])
+            await send_text_with_voice_button(update, context, response)
+            context.user_data["last_intent"] = None
+            return
+        else:
+            context.user_data["last_intent"] = None
+    elif predicted_tag == "подбор_породы":
         intent = tag_to_intent[predicted_tag]
         response = random.choice(intent["responses"])
-        await update.message.reply_text(response)
+        await send_text_with_voice_button(update, context, response)
         await start_breed_dialog(update, context)
         return
     elif predicted_tag == "прощание":
         intent = tag_to_intent[predicted_tag]
         response = random.choice(intent["responses"])
-        await update.message.reply_text(response)
+        await send_text_with_voice_button(update, context, response)
         await start_over(update, context, False)
         return
     elif predicted_tag in tag_to_intent:
         intent = tag_to_intent[predicted_tag]
         response = random.choice(intent["responses"])
-        await update.message.reply_text(response)
+        await send_text_with_voice_button(update, context, response)
 
         # Если этот ответ бота требует подтверждения — сохранить last_intent
         if predicted_tag in ["питание_royal", "питание_purina", "скидки", "товары", "реклама"]:
@@ -220,6 +190,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
 
     app.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.VOICE, handle_message))
+    app.add_handler(CallbackQueryHandler(callback_tts_handler))
 
     print("Бот запущен...")
     app.run_polling()

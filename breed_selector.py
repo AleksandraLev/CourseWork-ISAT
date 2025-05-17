@@ -1,8 +1,10 @@
+import io
 import json
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from text_utils import clean_text, correct_spelling_words, lemmatize
-from voice_utils import recognize_voice_from_file
+from voice_utils import recognize_voice_from_file, send_text_with_voice_button
+from gtts import gTTS
 import pickle
 import subprocess
 
@@ -51,7 +53,7 @@ async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE
     answers = dialog.get("answers", {})
 
     if step >= len(questions):
-        await update.message.reply_text("Что-то пошло не так. Попробуйте сначала.")
+        await send_text_with_voice_button(update, context, "Что-то пошло не так. Попробуйте сначала.")
         context.user_data.pop("breed_dialog", None)
         return
     if update.message.voice:
@@ -65,7 +67,7 @@ async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             subprocess.run([ffmpeg_path, "-i", file_path, wav_path, "-y"], check=True)
         except Exception as e:
-            await update.message.reply_text("Ошибка! Попробуйте позже.")
+            await send_text_with_voice_button(update, context, "Ошибка! Попробуйте позже.")
             print("Ошибка при конвертации аудио")
             return
 
@@ -73,9 +75,9 @@ async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         if user_input:
             # Отправляем распознанный текст пользователю
-            await update.message.reply_text("Вы сказали: " + user_input)
+            await send_text_with_voice_button(update, context, "Вы сказали: " + user_input)
         else:
-            await update.message.reply_text("Не удалось распознать голосовое сообщение.")
+            await send_text_with_voice_button(update, context, "Не удалось распознать голосовое сообщение.")
             return
     
     elif update.message.text:
@@ -101,8 +103,8 @@ async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE
         if predicted in valid_options:
             lemmatized_text = predicted
         else:
-            await update.message.reply_text("Это не совсем то, что я ожидал. Попробуйте ещё раз:")
-            await update.message.reply_text(f"{question['question']}\n(" + " / ".join(valid_options) + ")")
+            await send_text_with_voice_button(update, context, "Это не совсем то, что я ожидал. Попробуйте ещё раз:")
+            await send_text_with_voice_button(update, context, f"{question['question']}\n(" + " / ".join(valid_options) + ")")
             return
 
     # Преобразование "да"/"нет" в bool
@@ -134,7 +136,7 @@ async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=ReplyKeyboardRemove()
         )
         # Теперь выводм сообщение с результатом
-        await update.message.reply_text(f"Рекомендуемая порода: {result}")
+        await send_text_with_voice_button(update, context, f"Рекомендуемая порода: {result}")
         # Очищаем данные пользователя
         context.user_data.pop("breed_dialog", None)
 
