@@ -1,4 +1,3 @@
-import io
 import json
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -22,9 +21,9 @@ def select_cat_breed(answers):
     advertisement = "\nКошки, подходящие под ваш выбор, уже находятся у нас в зоомагазине и ищут тёплый, уютный дом. Может быть, один из них станет вашим верным любимцем."
     if answers["allergy"]:
         return "Сфинкс – отличная порода для аллергиков." + advertisement
-    if answers["kids"] and answers["activity"] == "высокая":
+    if answers["kids"] and answers["activity"]:
         return "Мейн-кун – игривая и дружелюбная кошка, отлично подходит для семьи." + advertisement
-    if answers["care"] == "высокий":
+    if answers["care"]:
         return "Персидская кошка – требует ухода, но очень ласковая." + advertisement
     if answers["activity"] == "низкая":
         return "Британская короткошёрстная – спокойная и независимая." + advertisement
@@ -94,7 +93,7 @@ async def handle_breed_dialog(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Лемматизация текста
     lemmatized_text = lemmatize(corrected)
 
-    # Используем обученную модель, если ответ не распознан напрямую
+    # Используем обученную модель
     if lemmatized_text not in valid_options:
         X = vectorizer.transform([lemmatized_text])
         predicted = model.predict(X)[0]

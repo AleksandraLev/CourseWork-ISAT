@@ -3,10 +3,10 @@ import io
 import json
 import random
 from pathlib import Path
-from telegram import Update
+from telegram import Update, ReplyKeyboardRemove
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from breed_selector import handle_breed_dialog, start_breed_dialog
-from text_utils import clean_text, correct_spelling_tag, lemmatize, correct_spelling_words
+from text_utils import clean_text, correct_spelling_tag, correct_spelling_words
 import pickle
 import subprocess
 from voice_utils import recognize_voice_from_file, send_text_with_voice_button, callback_tts_handler
@@ -29,9 +29,14 @@ with open("answers_for_advertisement.json", "r", encoding="utf-8") as f:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привет! Я твой усатый бот зоомагазина. Спросите что-нибудь!")
+    await send_text_with_voice_button(update, context, "Привет! Я твой усатый бот зоомагазина. Спросите что-нибудь!")
 
 async def start_over(update: Update, context: ContextTypes.DEFAULT_TYPE, is_not_goodbye = True):
+    # Удаляем обычную клавиатуру
+    await update.message.reply_text(
+        "Перезагружаю своё сознание...",
+        reply_markup=ReplyKeyboardRemove()
+    )
     # Сброс данных опроса
     context.user_data.pop("breed_dialog", None)
     if is_not_goodbye:
@@ -51,7 +56,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/start_over - Чтобы сбросить прогресс диалога и начинается заново\n"
         "/help - Чтобы показать это сообщение"
     )
-    await update.message.reply_text(help_text)
+    await send_text_with_voice_button(update, context, help_text)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.voice:
@@ -79,7 +84,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Отправляем распознанный текст пользователю
             await update.message.reply_text("Вы сказали: " + text)
         else:
-            await update.message.reply_text("Не удалось распознать голосовое сообщение.")
+            await send_text_with_voice_button(update, context, "Не удалось распознать голосовое сообщение.")
             return
     
     elif update.message.text:
@@ -125,25 +130,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если тег — это запуск подбора породы
     
     last = context.user_data.get("last_intent")
-    if last == "питание_royal" or last == "питание_purina" or last == "реклама" or last == "товары":
+    continue_advertisement_intents = ["питание_royal", "питание_purina", "реклама", "товары"]
+    if last in continue_advertisement_intents:
         tag_to_intent_advertisement = {answer["tag"]: answer for answer in answers}
         if predicted_tag == "согласие":
             last = context.user_data.get("last_intent")
             intent = tag_to_intent_advertisement[predicted_tag]
             if last == "питание_royal":
-                await update.message.reply_text(intent["responses"][0])
+                await send_text_with_voice_button(update, context, intent["responses"][0])
                 context.user_data["last_intent"] = None
                 return
             elif last == "питание_purina":
-                await update.message.reply_text(intent["responses"][1])
+                await send_text_with_voice_button(update, context, intent["responses"][1])
                 context.user_data["last_intent"] = None
                 return
             elif last == "реклама":
-                await update.message.reply_text(intent["responses"][2])
+                await send_text_with_voice_button(update, context, intent["responses"][2])
                 context.user_data["last_intent"] = None
                 return
             elif last == "товары":
-                await update.message.reply_text(intent["responses"][3])
+                await send_text_with_voice_button(update, context, intent["responses"][3])
                 context.user_data["last_intent"] = None
                 return
         elif predicted_tag == "отрицание":
@@ -153,7 +159,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["last_intent"] = None
             return
         else:
+            # Повторно обрабатываем такой же интент
+            intent = tag_to_intent[predicted_tag]
+            response = random.choice(intent["responses"])
+            await send_text_with_voice_button(update, context, response)
             context.user_data["last_intent"] = None
+            return
+
     elif predicted_tag == "подбор_породы":
         intent = tag_to_intent[predicted_tag]
         response = random.choice(intent["responses"])
@@ -172,14 +184,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_text_with_voice_button(update, context, response)
 
         # Если этот ответ бота требует подтверждения — сохранить last_intent
-        if predicted_tag in ["питание_royal", "питание_purina", "скидки", "товары", "реклама"]:
+        if predicted_tag in continue_advertisement_intents:
             context.user_data["last_intent"] = predicted_tag
             print(f"Сохраняем last_intent: {predicted_tag}")
 
         return
         
     # Если ничего не подошло
-    await update.message.reply_text("Не понял вопрос. Попробуйте иначе.")
+    await send_text_with_voice_button(update, context, "Не понял вопрос. Попробуйте иначе.")
 
 def main():
     TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")

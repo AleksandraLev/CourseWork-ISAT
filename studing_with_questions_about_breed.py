@@ -10,14 +10,15 @@ with open("questions_about_breed.json", "r", encoding="utf-8") as file:
 
 # Подготовка данных
 keys = []
-questions = []
+answers  = []
 for question in data["questions_about_breed"]:
-    questions.append(question["question"])
-    keys.append(question["key"])
+    for option in question["options"]:
+        answers.append(option)
+        keys.append(question["key"])
 
 # Векторизация текста
 vectorizer = CountVectorizer()
-X = vectorizer.fit_transform(questions)
+X = vectorizer.fit_transform(answers)
 y = np.array(keys)
 
 # Обучение модели
