@@ -1,5 +1,4 @@
 import os
-import io
 import json
 import random
 from pathlib import Path
@@ -9,7 +8,7 @@ from breed_selector import handle_breed_dialog, start_breed_dialog
 from text_utils import clean_text, correct_spelling_tag, correct_spelling_words
 import pickle
 import subprocess
-from voice_utils import recognize_voice_from_file, send_text_with_voice_button, callback_tts_handler
+from voice_utils import recognize_voice_from_file, send_text_with_voice_button, text_to_voice_by_clicking_button
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="token.env")
@@ -66,7 +65,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await file.download_to_drive(file_path)
 
-        # Корень проекта (файл main.py или аналог — от него и считается)
+        # Корень проекта (там, где файл main.py)
         BASE_DIR = Path(__file__).resolve().parent
         # Относительный путь к ffmpeg
         ffmpeg_path = str(BASE_DIR / "ffmpeg-7.1.1-essentials_build" / "bin" / "ffmpeg.exe")
@@ -114,14 +113,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         predicted_words = correct_spelling_words(cleaned, pattern_to_tag)
         # Получаем вероятности предсказания по всем тегам
-        X = vectorizer.transform([predicted_words])  # Преобразуем текст в формат, который понимает модель
-        probs = model.predict_proba(X)[0]  # Получаем вероятности для всех тегов
-        max_prob_index = probs.argmax()  # Находим тег с максимальной вероятностью
-        max_prob = probs[max_prob_index] # Получаем эту максимальную вероятность наиболее вероятного тэга
+        X = vectorizer.transform([predicted_words])  # Преобразование текста в вектор
+        probs = model.predict_proba(X)[0]  # Получение вероятностей для всех тегов
+        max_prob_index = probs.argmax()  # Тег с максимальной вероятностью
+        max_prob = probs[max_prob_index] # Получение этой максимальной вероятностьи наиболее вероятного тэга
         predicted_tag = model.classes_[max_prob_index] # Извлекаем тег
 
         print(f"Predicted tag: {predicted_tag}, Probability: {max_prob}")
-        # Уверенность предсказания должна быть хотя бы 0.6 (можно подстроить)
         if max_prob < 0.23:
             await send_text_with_voice_button(update, context, "Я не совсем понял вас. Попробуйте переформулировать.")
             return
@@ -202,7 +200,7 @@ def main():
     app.add_handler(CommandHandler("help", help_command))
 
     app.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.VOICE, handle_message))
-    app.add_handler(CallbackQueryHandler(callback_tts_handler))
+    app.add_handler(CallbackQueryHandler(text_to_voice_by_clicking_button))
 
     print("Бот запущен...")
     app.run_polling()

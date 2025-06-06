@@ -24,7 +24,7 @@ async def send_text_with_voice_button(update, context, text):
     ]])
     await update.message.reply_text(text, reply_markup=keyboard)
 
-async def callback_tts_handler(update, context):
+async def text_to_voice_by_clicking_button(update, context):
     query = update.callback_query
     await query.answer()
     
