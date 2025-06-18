@@ -30,7 +30,7 @@ with open("answers_for_advertisement.json", "r", encoding="utf-8") as f:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_text_with_voice_button(update, context, "Привет! Я твой усатый бот зоомагазина. Спросите что-нибудь!")
 
-async def start_over(update: Update, context: ContextTypes.DEFAULT_TYPE, is_not_goodbye = True):
+async def start_over(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Удаляем обычную клавиатуру
     await update.message.reply_text(
         "Перезагружаю своё сознание...",
@@ -38,8 +38,7 @@ async def start_over(update: Update, context: ContextTypes.DEFAULT_TYPE, is_not_
     )
     # Сброс данных опроса
     context.user_data.pop("breed_dialog", None)
-    if is_not_goodbye:
-        await start(update, context)
+    await start(update, context)
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
@@ -174,7 +173,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         intent = tag_to_intent[predicted_tag]
         response = random.choice(intent["responses"])
         await send_text_with_voice_button(update, context, response)
-        await start_over(update, context, False)
+        context.user_data["last_intent"] = None
         return
     elif predicted_tag in tag_to_intent:
         intent = tag_to_intent[predicted_tag]
